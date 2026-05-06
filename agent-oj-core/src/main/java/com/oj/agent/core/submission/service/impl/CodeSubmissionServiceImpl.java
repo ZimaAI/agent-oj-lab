@@ -4,8 +4,6 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oj.agent.common.util.JsonUtils;
 import com.oj.agent.core.executor.tool.ExecutionComparisonPolicy;
@@ -17,6 +15,7 @@ import com.oj.agent.core.question.model.result.AlgorithmCodeTemplateResult;
 import com.oj.agent.core.question.model.result.AlgorithmQuestionResult;
 import com.oj.agent.core.question.service.AlgorithmCodeService;
 import com.oj.agent.core.question.service.AlgorithmQuestionService;
+import com.oj.agent.core.question.util.StandardCasePoolCodec;
 import com.oj.agent.core.submission.converter.CodeSubmissionConverter;
 import com.oj.agent.core.submission.mapper.CodeSubmissionMapper;
 import com.oj.agent.core.submission.model.command.CodeRunCommand;
@@ -34,16 +33,12 @@ import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class CodeSubmissionServiceImpl extends ServiceImpl<CodeSubmissionMapper, CodeSubmission>
         implements CodeSubmissionService {
-
-    private static final TypeReference<Map<String, Object>> STRING_OBJECT_MAP_TYPE = new TypeReference<>() {
-    };
 
     private static final String SUBMISSION_STATUS_PENDING = "PENDING";
 
@@ -104,7 +99,9 @@ public class CodeSubmissionServiceImpl extends ServiceImpl<CodeSubmissionMapper,
         executionRequest.setFunctionName(resolvedCommand.getFunctionName());
         executionRequest.setTestInputs(resolvedCommand.getTestInputs());
 
-        List<Object> expectedOutputs = parseExpectedOutputs(question.getSharedTestCases());
+        List<StandardCasePoolCodec.StandardCaseItem> publicCases =
+                StandardCasePoolCodec.resolvePublicCases(question.getSharedTestCases());
+        List<Object> expectedOutputs = StandardCasePoolCodec.toLegacyExpectedOutputs(publicCases);
         if (!expectedOutputs.isEmpty() && expectedOutputs.size() == resolvedCommand.getTestInputs().size()) {
             executionRequest.setExpectedOutputs(expectedOutputs);
         }
@@ -199,7 +196,9 @@ public class CodeSubmissionServiceImpl extends ServiceImpl<CodeSubmissionMapper,
 
         command.setFunctionName(codeMetadata.getFunctionName());
         if (command.getTestInputs() == null) {
-            command.setTestInputs(parseTestInputs(question.getSharedTestCases()));
+            List<StandardCasePoolCodec.StandardCaseItem> publicCases =
+                    StandardCasePoolCodec.resolvePublicCases(question.getSharedTestCases());
+            command.setTestInputs(StandardCasePoolCodec.toLegacyTestInputs(publicCases));
         }
         return question;
     }
@@ -216,57 +215,6 @@ public class CodeSubmissionServiceImpl extends ServiceImpl<CodeSubmissionMapper,
                 throw new IllegalArgumentException("testInputs contains null test case");
             }
         }
-    }
-
-    private List<Map<String, Object>> parseTestInputs(String testCasesJson) {
-        if (!StringUtils.hasText(testCasesJson)) {
-            throw new IllegalArgumentException("testCases cannot be empty");
-        }
-        try {
-            JsonNode testCasesNode = objectMapper.readTree(testCasesJson);
-            if (!testCasesNode.isArray()) {
-                throw new IllegalArgumentException("testCases must be an array");
-            }
-
-            List<Map<String, Object>> testInputs = new ArrayList<>();
-            for (JsonNode testCaseNode : testCasesNode) {
-                JsonNode inputNode = testCaseNode.get("input");
-                if (inputNode == null || !inputNode.isObject()) {
-                    throw new IllegalArgumentException("Each test case must have an object input");
-                }
-                testInputs.add(objectMapper.convertValue(inputNode, STRING_OBJECT_MAP_TYPE));
-            }
-            return testInputs;
-        } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("Failed to parse testCases", e);
-        }
-    }
-
-    private List<Object> parseExpectedOutputs(String testCasesJson) {
-        if (!StringUtils.hasText(testCasesJson)) {
-            return List.of();
-        }
-        try {
-            JsonNode testCasesNode = objectMapper.readTree(testCasesJson);
-            if (!testCasesNode.isArray()) {
-                throw new IllegalArgumentException("testCases must be an array");
-            }
-
-            List<Object> expectedOutputs = new ArrayList<>();
-            for (JsonNode testCaseNode : testCasesNode) {
-                expectedOutputs.add(toObjectValue(testCaseNode.get("expectedOutput")));
-            }
-            return expectedOutputs;
-        } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("Failed to parse testCases", e);
-        }
-    }
-
-    private Object toObjectValue(JsonNode node) {
-        if (node == null || node.isNull() || node.isMissingNode()) {
-            return null;
-        }
-        return objectMapper.convertValue(node, Object.class);
     }
 
     private AlgorithmQuestionResult getRequiredQuestion(Long questionId) {

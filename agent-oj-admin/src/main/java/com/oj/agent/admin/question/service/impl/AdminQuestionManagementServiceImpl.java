@@ -1,8 +1,5 @@
 package com.oj.agent.admin.question.service.impl;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
@@ -37,14 +34,11 @@ import com.oj.agent.core.question.model.result.AlgorithmQuestionResult;
 import com.oj.agent.core.rag.enums.KnowledgeDocumentStatus;
 import com.oj.agent.core.rag.model.entity.*;
 import com.oj.agent.core.rag.model.result.KnowledgeDocumentParseResult;
-import com.oj.agent.core.executor.tool.ExecuteCodeTool;
-import com.oj.agent.core.executor.tool.ExecutionComparisonPolicy;
-import com.oj.agent.core.executor.tool.model.CodeExecutionRequest;
-import com.oj.agent.core.executor.tool.model.CodeExecutionResult;
 import com.oj.agent.core.question.service.AlgorithmCodeService;
 import com.oj.agent.core.question.service.AlgorithmQuestionKnowledgeDocumentService;
 import com.oj.agent.core.question.service.AlgorithmQuestionService;
 import com.oj.agent.core.question.service.AlgorithmQuestionVectorSyncService;
+import com.oj.agent.core.question.util.StandardCasePoolCodec;
 import com.oj.agent.core.rag.mapper.KnowledgeDocumentMapper;
 import com.oj.agent.core.rag.mapper.KnowledgeSegmentHitkTaskMapper;
 import com.oj.agent.core.rag.mapper.KnowledgeSegmentMapper;
@@ -90,15 +84,12 @@ import java.nio.file.Files;
 @Service
 public class AdminQuestionManagementServiceImpl implements AdminQuestionManagementService {
 
-    private static final TypeReference<Map<String, Object>> STRING_OBJECT_MAP_TYPE = new TypeReference<>() {
-    };
     private static final String DELETE_MARK_MESSAGE = "Admin batch delete";
     private static final String DELETE_DOCUMENT_MESSAGE = "Admin question document delete";
     private static final String CODE_TEMPLATE_UPDATE_FAILURE_MESSAGE = "MySQL code template update failed";
     private static final String QUESTION_CREATE_FAILURE_MESSAGE = "MySQL question create failed";
     private static final String CODE_TEMPLATE_CREATE_FAILURE_MESSAGE = "MySQL code template create failed";
     private static final String DOCUMENT_UPLOAD_FAILURE_MESSAGE = "Question document upload failed";
-    private static final String CREATE_VALIDATION_FAILURE_MESSAGE = "Create question validation failed";
     private static final int PROGRESS_UPLOADED = 10;
     private static final int PROGRESS_CONVERTING = 60;
     private static final int PROGRESS_VECTOR_STORED = 100;
@@ -126,7 +117,6 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
     private final QuestionTagPersistenceService questionTagPersistenceService;
     private final AlgorithmQuestionTagMapper algorithmQuestionTagMapper;
     private final TagMapper tagMapper;
-    private final ExecuteCodeTool executeCodeTool;
     private final QuestionSyncCompensationTaskMapper compensationTaskMapper;
     private final AgentVectorStore agentVectorStore;
     private final AgentVectorStore knowledgeSegmentAgentVectorStore;
@@ -144,7 +134,6 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
                                               QuestionTagPersistenceService questionTagPersistenceService,
                                               AlgorithmQuestionTagMapper algorithmQuestionTagMapper,
                                               TagMapper tagMapper,
-                                              ExecuteCodeTool executeCodeTool,
                                               QuestionSyncCompensationTaskMapper compensationTaskMapper,
                                               AgentVectorStore agentVectorStore,
                                               @Qualifier("knowledgeSegmentAgentVectorStore") AgentVectorStore knowledgeSegmentAgentVectorStore,
@@ -160,7 +149,6 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
         this.questionTagPersistenceService = questionTagPersistenceService;
         this.algorithmQuestionTagMapper = algorithmQuestionTagMapper;
         this.tagMapper = tagMapper;
-        this.executeCodeTool = executeCodeTool;
         this.compensationTaskMapper = compensationTaskMapper;
         this.agentVectorStore = agentVectorStore;
         this.knowledgeSegmentAgentVectorStore = knowledgeSegmentAgentVectorStore;
@@ -189,15 +177,13 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
     public AdminQuestionDualDetailResult createQuestion(AdminQuestionCreateCommand request) {
         // 先做请求级校验，避免非法数据入库。
         validateCreateRequest(request);
-        // 解析测试用例并提取执行器需要的 testInputs（仅 input 对象）。
-        SharedTestCaseBundle testCaseBundle = parseSharedTestCasesOrThrow(request.getSharedTestCases());
+        List<StandardCasePoolCodec.StandardCaseItem> normalizedCasePool =
+                normalizeCreateStandardCasePool(request.getStandardCasePool());
         List<NormalizedCodeTemplate> normalizedTemplates = normalizeCreateCodeTemplates(request.getCodeTemplates());
-        // 执行参考答案与方法名校验，校验失败直接阻断创建。
-        validateCreateTemplatesWithExecutor(normalizedTemplates, testCaseBundle, request.getDescription());
         // 合并系统标签与自定义标签，并按名称持久化。
         List<String> tagNames = resolveCreateTagNames(request.getTagIds(), request.getTags());
 
-        AlgorithmQuestion question = buildCreateQuestion(request);
+        AlgorithmQuestion question = buildCreateQuestion(request, normalizedCasePool);
         boolean saved = algorithmQuestionService.save(question);
         if (!saved || question.getId() == null) {
             throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(), QUESTION_CREATE_FAILURE_MESSAGE);
@@ -756,8 +742,8 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
         AlgorithmCode record = new AlgorithmCode();
         record.setQuestionId(questionId);
         record.setLanguage(template.getLanguage() == null ? null : template.getLanguage().trim());
-        record.setFunctionName(template.getFunctionName() == null ? null : template.getFunctionName().trim());
-        record.setCodeSkeleton(template.getCodeSkeleton());
+        record.setFunctionName(template.getEntryMethodName() == null ? null : template.getEntryMethodName().trim());
+        record.setCodeSkeleton(template.getStarterCode());
         record.setReferenceAnswer(template.getReferenceAnswer());
         record.setIsDelete(0);
         return record;
@@ -776,11 +762,8 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
         if (!StringUtils.hasText(request.getDifficulty())) {
             throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(), "Difficulty cannot be blank");
         }
-        if (!StringUtils.hasText(request.getSharedFunctionName())) {
-            throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(), "Shared function name cannot be blank");
-        }
-        if (!StringUtils.hasText(request.getSharedTestCases())) {
-            throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(), "Shared test cases cannot be blank");
+        if (CollectionUtils.isEmpty(request.getStandardCasePool())) {
+            throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(), "Standard case pool cannot be empty");
         }
         String normalizedDifficulty = request.getDifficulty().trim().toUpperCase();
         if (!ALLOWED_DIFFICULTIES.contains(normalizedDifficulty)) {
@@ -807,14 +790,14 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
                         "Code templates contain duplicate language: " + language.name());
             }
 
-            String functionName = trimToNull(template.getFunctionName());
+            String functionName = trimToNull(template.getEntryMethodName());
             if (!StringUtils.hasText(functionName)) {
                 throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(),
-                        "Template function name cannot be blank, language: " + language.name());
+                        "Template entry method name cannot be blank, language: " + language.name());
             }
-            if (!StringUtils.hasText(template.getCodeSkeleton())) {
+            if (!StringUtils.hasText(template.getStarterCode())) {
                 throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(),
-                        "Template code skeleton cannot be blank, language: " + language.name());
+                        "Template starter code cannot be blank, language: " + language.name());
             }
             if (!StringUtils.hasText(template.getReferenceAnswer())) {
                 throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(),
@@ -824,7 +807,7 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
             normalizedTemplates.add(new NormalizedCodeTemplate(
                     language,
                     functionName,
-                    template.getCodeSkeleton(),
+                    template.getStarterCode(),
                     template.getReferenceAnswer()
             ));
         }
@@ -914,138 +897,95 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
         return tagNames;
     }
 
-    private SharedTestCaseBundle parseSharedTestCasesOrThrow(String sharedTestCasesJson) {
-        if (!StringUtils.hasText(sharedTestCasesJson)) {
-            throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(), "Shared test cases cannot be blank");
+    private List<StandardCasePoolCodec.StandardCaseItem> normalizeCreateStandardCasePool(
+            List<AdminQuestionCreateCommand.StandardCaseCreateCommand> rawCasePool) {
+        if (CollectionUtils.isEmpty(rawCasePool)) {
+            throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(), "Standard case pool cannot be empty");
         }
-        try {
-            // 解析测试用例数组，并严格提取 input 字段用于执行器调用。
-            JsonNode testCasesNode = objectMapper.readTree(sharedTestCasesJson);
-            if (!testCasesNode.isArray() || testCasesNode.isEmpty()) {
-                throw new ValidationException(
-                        SecurityErrorCode.TABLE_001.getCode(),
-                        "Shared test cases must be a non-empty array"
-                );
+
+        List<StandardCasePoolCodec.StandardCaseItem> items = new ArrayList<>(rawCasePool.size());
+        for (int index = 0; index < rawCasePool.size(); index++) {
+            AdminQuestionCreateCommand.StandardCaseCreateCommand current = rawCasePool.get(index);
+            if (current == null) {
+                throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(),
+                        "standardCasePool[%d] cannot be null".formatted(index));
+            }
+            String stdin = trimToNull(current.getStdin());
+            String expectedStdout = trimToNull(current.getExpectedStdout());
+            if (!StringUtils.hasText(stdin)) {
+                throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(),
+                        "standardCasePool[%d].stdin cannot be blank".formatted(index));
+            }
+            if (!StringUtils.hasText(expectedStdout)) {
+                throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(),
+                        "standardCasePool[%d].expectedStdout cannot be blank".formatted(index));
+            }
+            if (current.getPublicCase() == null) {
+                throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(),
+                        "standardCasePool[%d].publicCase cannot be null".formatted(index));
             }
 
-            List<Map<String, Object>> testInputs = new ArrayList<>();
-            List<Object> expectedOutputs = new ArrayList<>();
-            for (int index = 0; index < testCasesNode.size(); index++) {
-                JsonNode testCaseNode = testCasesNode.get(index);
-                JsonNode inputNode = testCaseNode == null ? null : testCaseNode.get("input");
-                if (inputNode == null || !inputNode.isObject()) {
-                    throw new ValidationException(
-                            SecurityErrorCode.TABLE_001.getCode(),
-                            "sharedTestCases[%d].input must be a valid object".formatted(index)
-                    );
-                }
-                testInputs.add(objectMapper.convertValue(inputNode, STRING_OBJECT_MAP_TYPE));
-                expectedOutputs.add(toObjectValue(testCaseNode.get("expectedOutput")));
-            }
-            return new SharedTestCaseBundle(List.copyOf(testInputs), List.copyOf(expectedOutputs));
-        } catch (ValidationException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new ValidationException(
-                    SecurityErrorCode.TABLE_001.getCode(),
-                    "Failed to parse shared test cases: " + ex.getMessage()
-            );
+            StandardCasePoolCodec.StandardCaseItem item = new StandardCasePoolCodec.StandardCaseItem();
+            item.setStdin(stdin);
+            item.setExpectedStdout(expectedStdout);
+            item.setPublicCase(current.getPublicCase());
+            item.setDescription(trimToNull(current.getDescription()));
+            items.add(item);
         }
+
+        return StandardCasePoolCodec.parseAndNormalize(StandardCasePoolCodec.serialize(items));
     }
 
-    private void validateCreateTemplatesWithExecutor(List<NormalizedCodeTemplate> templates,
-                                                     SharedTestCaseBundle testCaseBundle,
-                                                     String questionDescription) {
-        if (executeCodeTool == null) {
-            throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(), "ExecuteCodeTool is not initialized");
+    private List<StandardCasePoolCodec.StandardCaseItem> normalizeUpdateStandardCasePool(
+            List<AdminQuestionUpdateCommand.StandardCaseUpdateCommand> rawCasePool) {
+        if (CollectionUtils.isEmpty(rawCasePool)) {
+            throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(), "Standard case pool cannot be empty");
         }
-        // 逐语言执行参考答案，确保方法名、测试用例与参考答案三者一致。
-        for (NormalizedCodeTemplate template : templates) {
-            CodeExecutionRequest executionRequest = new CodeExecutionRequest();
-            executionRequest.setLanguage(template.language().name());
-            executionRequest.setCode(template.referenceAnswer());
-            executionRequest.setFunctionName(template.functionName());
-            executionRequest.setTestInputs(testCaseBundle.testInputs());
-            executionRequest.setExpectedOutputs(testCaseBundle.expectedOutputs());
-            if (ExecutionComparisonPolicy.shouldIgnoreCollectionOrder(questionDescription)) {
-                executionRequest.setIgnoreCollectionOrder(true);
+
+        List<StandardCasePoolCodec.StandardCaseItem> items = new ArrayList<>(rawCasePool.size());
+        for (int index = 0; index < rawCasePool.size(); index++) {
+            AdminQuestionUpdateCommand.StandardCaseUpdateCommand current = rawCasePool.get(index);
+            if (current == null) {
+                throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(),
+                        "standardCasePool[%d] cannot be null".formatted(index));
+            }
+            String stdin = trimToNull(current.getStdin());
+            String expectedStdout = trimToNull(current.getExpectedStdout());
+            if (!StringUtils.hasText(stdin)) {
+                throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(),
+                        "standardCasePool[%d].stdin cannot be blank".formatted(index));
+            }
+            if (!StringUtils.hasText(expectedStdout)) {
+                throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(),
+                        "standardCasePool[%d].expectedStdout cannot be blank".formatted(index));
+            }
+            if (current.getPublicCase() == null) {
+                throw new ValidationException(SecurityErrorCode.TABLE_001.getCode(),
+                        "standardCasePool[%d].publicCase cannot be null".formatted(index));
             }
 
-            String toolResponse = callExecuteCodeTool(executionRequest);
-            CodeExecutionResult executionResult = parseExecutionResult(toolResponse);
-            if (executionResult == null || !executionResult.isSuccess()) {
-                String errorMessage = extractExecutionError(executionResult);
-                throw new ValidationException(
-                        SecurityErrorCode.TABLE_001.getCode(),
-                        "Template validation failed for language %s: %s".formatted(template.language().name(), errorMessage)
-                );
-            }
+            StandardCasePoolCodec.StandardCaseItem item = new StandardCasePoolCodec.StandardCaseItem();
+            item.setStdin(stdin);
+            item.setExpectedStdout(expectedStdout);
+            item.setPublicCase(current.getPublicCase());
+            item.setDescription(trimToNull(current.getDescription()));
+            items.add(item);
         }
+
+        return StandardCasePoolCodec.parseAndNormalize(StandardCasePoolCodec.serialize(items));
     }
 
-    private String callExecuteCodeTool(CodeExecutionRequest request) {
-        try {
-            return executeCodeTool.call(objectMapper.writeValueAsString(request));
-        } catch (JsonProcessingException ex) {
-            throw new ValidationException(
-                    SecurityErrorCode.TABLE_001.getCode(),
-                    CREATE_VALIDATION_FAILURE_MESSAGE + ": request serialization failed"
-            );
-        }
-    }
-
-    private CodeExecutionResult parseExecutionResult(String toolResponse) {
-        if (!StringUtils.hasText(toolResponse)) {
-            throw new ValidationException(
-                    SecurityErrorCode.TABLE_001.getCode(),
-                    CREATE_VALIDATION_FAILURE_MESSAGE + ": empty executor response"
-            );
-        }
-        try {
-            return objectMapper.readValue(toolResponse, CodeExecutionResult.class);
-        } catch (Exception ex) {
-            throw new ValidationException(
-                    SecurityErrorCode.TABLE_001.getCode(),
-                    CREATE_VALIDATION_FAILURE_MESSAGE + ": invalid executor response"
-            );
-        }
-    }
-
-    private String extractExecutionError(CodeExecutionResult executionResult) {
-        if (executionResult == null) {
-            return "unknown error";
-        }
-        if (StringUtils.hasText(executionResult.getErrorMessage())) {
-            return executionResult.getErrorMessage();
-        }
-        if (CollectionUtils.isEmpty(executionResult.getResults())) {
-            return "unknown error";
-        }
-        return executionResult.getResults().stream()
-                .filter(Objects::nonNull)
-                .map(result -> result.getError())
-                .filter(StringUtils::hasText)
-                .findFirst()
-                .orElse("unknown error");
-    }
-
-    private Object toObjectValue(JsonNode node) {
-        if (node == null || node.isNull() || node.isMissingNode()) {
-            return null;
-        }
-        return objectMapper.convertValue(node, Object.class);
-    }
-
-    private AlgorithmQuestion buildCreateQuestion(AdminQuestionCreateCommand request) {
+    private AlgorithmQuestion buildCreateQuestion(AdminQuestionCreateCommand request,
+                                                  List<StandardCasePoolCodec.StandardCaseItem> normalizedCasePool) {
         AlgorithmQuestion question = new AlgorithmQuestion();
         question.setUserId(resolveCurrentUserId());
         question.setTitle(request.getTitle().trim());
         question.setDescription(request.getDescription().trim());
         question.setDifficulty(request.getDifficulty().trim().toUpperCase());
         question.setType(AlgorithmQuestionTypeEnum.SYSTEM.name());
-        question.setSharedFunctionName(trimToNull(request.getSharedFunctionName()));
-        question.setSharedCodeSkeleton(request.getSharedCodeSkeleton());
-        question.setSharedTestCases(request.getSharedTestCases());
+        question.setSharedFunctionName(null);
+        question.setSharedCodeSkeleton(null);
+        question.setStandardCasePool(StandardCasePoolCodec.serialize(normalizedCasePool));
         question.setConversationId(UUID.randomUUID().toString());
         question.setTraceId(UUID.randomUUID().toString());
         question.setAgentName("admin-question-management");
@@ -1359,14 +1299,10 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
         if (request.getDifficulty() != null) {
             target.setDifficulty(request.getDifficulty().trim());
         }
-        if (request.getSharedFunctionName() != null) {
-            target.setSharedFunctionName(request.getSharedFunctionName().trim());
-        }
-        if (request.getSharedCodeSkeleton() != null) {
-            target.setSharedCodeSkeleton(request.getSharedCodeSkeleton());
-        }
-        if (request.getSharedTestCases() != null) {
-            target.setSharedTestCases(request.getSharedTestCases());
+        if (request.getStandardCasePool() != null) {
+            List<StandardCasePoolCodec.StandardCaseItem> normalizedCasePool =
+                    normalizeUpdateStandardCasePool(request.getStandardCasePool());
+            target.setStandardCasePool(StandardCasePoolCodec.serialize(normalizedCasePool));
         }
         target.setVectorSyncStatus("SUCCESS");
         target.setVectorSyncErrorMessage(null);
@@ -1388,9 +1324,7 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
         return request.getTitle() == null
                 && request.getDescription() == null
                 && request.getDifficulty() == null
-                && request.getSharedFunctionName() == null
-                && request.getSharedCodeSkeleton() == null
-                && request.getSharedTestCases() == null
+                && request.getStandardCasePool() == null
                 && request.getCodeTemplates() == null
                 && request.getTags() == null;
     }
@@ -1533,9 +1467,5 @@ public class AdminQuestionManagementServiceImpl implements AdminQuestionManageme
                                           String functionName,
                                           String codeSkeleton,
                                           String referenceAnswer) {
-    }
-
-    private record SharedTestCaseBundle(List<Map<String, Object>> testInputs,
-                                        List<Object> expectedOutputs) {
     }
 }

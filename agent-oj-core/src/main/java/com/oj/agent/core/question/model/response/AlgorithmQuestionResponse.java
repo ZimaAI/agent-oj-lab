@@ -24,6 +24,8 @@ public class AlgorithmQuestionResponse {
 
     private String sharedTestCases;
 
+    private List<StandardCaseResponse> standardCasePool;
+
     private List<AlgorithmCodeTemplateResponse> codeTemplates;
 
     private String conversationId;

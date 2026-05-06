@@ -55,11 +55,12 @@ export interface AdminQuestionDetail {
   description: string
   difficulty: string | null
   type: AdminQuestionType | null
-  language: string | null
-  functionName: string | null
-  codeSkeleton: string | null
-  referenceAnswer: string | null
-  testCases: string | null
+  standardCasePool?: AdminStandardCase[] | null
+  language?: string | null
+  functionName?: string | null
+  codeSkeleton?: string | null
+  referenceAnswer?: string | null
+  testCases?: string | null
   vectorSyncStatus: string | null
   vectorSyncErrorMessage: string | null
   isDelete: number
@@ -90,28 +91,37 @@ export interface AdminQuestionUpdateRequest {
   title?: string
   description?: string
   difficulty?: AdminDifficulty
-  language?: string
-  functionName?: string
-  codeSkeleton?: string
-  referenceAnswer?: string
-  testCases?: string
+  standardCasePool?: AdminStandardCase[]
   tags?: string[]
+  codeTemplates?: AdminQuestionCodeTemplateUpdateRequest[]
 }
 
 export interface AdminQuestionCodeTemplateCreateRequest {
   language: 'JAVA' | 'PYTHON' | 'JAVASCRIPT'
-  functionName: string
-  codeSkeleton: string
+  entryMethodName?: string
+  starterCode: string
   referenceAnswer: string
+}
+
+export interface AdminQuestionCodeTemplateUpdateRequest {
+  language: 'JAVA' | 'PYTHON' | 'JAVASCRIPT'
+  entryMethodName?: string
+  starterCode?: string
+  referenceAnswer?: string
+}
+
+export interface AdminStandardCase {
+  stdin: string
+  expectedStdout: string
+  publicCase: boolean
+  description?: string
 }
 
 export interface AdminQuestionCreateRequest {
   title: string
   description: string
   difficulty: AdminDifficulty
-  sharedFunctionName: string
-  sharedCodeSkeleton?: string
-  sharedTestCases: string
+  standardCasePool: AdminStandardCase[]
   tagIds?: number[]
   tags?: string[]
   codeTemplates: AdminQuestionCodeTemplateCreateRequest[]

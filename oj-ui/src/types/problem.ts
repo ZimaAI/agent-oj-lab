@@ -43,6 +43,13 @@ export interface TestCase {
   result?: TestCaseResult
 }
 
+export interface StandardCase {
+  stdin: string
+  expectedStdout: string
+  publicCase: boolean
+  description?: string | null
+}
+
 export interface AlgorithmCodeTemplate {
   language: string
   functionName: string | null
@@ -58,6 +65,7 @@ export interface AlgorithmQuestion {
   description: string
   difficulty: Difficulty | null
   type: AlgorithmQuestionType | null
+  standardCasePool: StandardCase[]
   sharedFunctionName: string | null
   sharedCodeSkeleton: string | null
   sharedTestCases: TestCase[]

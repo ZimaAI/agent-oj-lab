@@ -34,7 +34,8 @@ public class AlgorithmQuestion {
 
     private String sharedCodeSkeleton;
 
-    private String sharedTestCases;
+    @TableField("shared_test_cases")
+    private String standardCasePool;
 
     private String conversationId;
 
@@ -98,11 +99,21 @@ public class AlgorithmQuestion {
 
     @Deprecated
     public String getTestCases() {
-        return sharedTestCases;
+        return standardCasePool;
     }
 
     @Deprecated
     public void setTestCases(String testCases) {
-        this.sharedTestCases = testCases;
+        this.standardCasePool = testCases;
+    }
+
+    @Deprecated
+    public String getSharedTestCases() {
+        return standardCasePool;
+    }
+
+    @Deprecated
+    public void setSharedTestCases(String sharedTestCases) {
+        this.standardCasePool = sharedTestCases;
     }
 }

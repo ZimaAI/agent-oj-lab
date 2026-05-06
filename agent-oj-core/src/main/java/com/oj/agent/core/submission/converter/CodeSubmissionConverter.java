@@ -36,8 +36,6 @@ public final class CodeSubmissionConverter {
         command.setCode(request.getCode());
         command.setAlgorithmQuestionId(request.getAlgorithmQuestionId());
         command.setLanguage(request.getLanguage());
-        command.setFunctionName(request.getFunctionName());
-        command.setTestInputs(request.getTestInputs());
         return command;
     }
 

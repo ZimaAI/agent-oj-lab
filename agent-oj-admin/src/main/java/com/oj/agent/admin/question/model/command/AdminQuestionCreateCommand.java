@@ -14,11 +14,7 @@ public class AdminQuestionCreateCommand {
 
     private String difficulty;
 
-    private String sharedFunctionName;
-
-    private String sharedCodeSkeleton;
-
-    private String sharedTestCases;
+    private List<StandardCaseCreateCommand> standardCasePool;
 
     private List<Long> tagIds;
 
@@ -30,8 +26,16 @@ public class AdminQuestionCreateCommand {
     @Data
     public static class CodeTemplateCreateCommand {
         private String language;
-        private String functionName;
-        private String codeSkeleton;
+        private String entryMethodName;
+        private String starterCode;
         private String referenceAnswer;
+    }
+
+    @Data
+    public static class StandardCaseCreateCommand {
+        private String stdin;
+        private String expectedStdout;
+        private Boolean publicCase;
+        private String description;
     }
 }

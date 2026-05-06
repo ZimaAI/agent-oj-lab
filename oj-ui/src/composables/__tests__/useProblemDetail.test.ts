@@ -16,7 +16,7 @@ describe('useProblemDetail', () => {
     vi.clearAllMocks()
   })
 
-  it('loads problem detail from shared backend contract', async () => {
+  it('loads problem detail from standard case pool contract', async () => {
     vi.mocked(problemApi.getProblemById).mockResolvedValue({
       id: 7,
       title: 'two sum',
@@ -24,10 +24,11 @@ describe('useProblemDetail', () => {
       difficulty: Difficulty.EASY,
       sharedFunctionName: 'twoSum',
       sharedCodeSkeleton: 'FUNCTION two_sum(nums, target):\n  // TODO',
-      sharedTestCases: [
+      standardCasePool: [
         {
-          input: { nums: [2, 7, 11, 15], target: 9 },
-          expectedOutput: [0, 1],
+          stdin: '4\n2 7 11 15\n9\n',
+          expectedStdout: '0 1\n',
+          publicCase: true,
           description: 'returns indices',
         },
       ],
@@ -50,12 +51,12 @@ describe('useProblemDetail', () => {
 
     await loadProblem(7)
 
-    expect(problem.value?.sharedFunctionName).toBe('twoSum')
-    expect(problem.value?.sharedTestCases).toHaveLength(1)
+    expect(problem.value?.standardCasePool).toHaveLength(1)
+    expect(problem.value?.sharedTestCases[0]?.input).toBe('4\n2 7 11 15\n9\n')
     expect(problem.value?.codeTemplates[0]?.language).toBe('PYTHON')
   })
 
-  it('parses string sharedTestCases from backend detail responses', async () => {
+  it('parses string standardCasePool from backend detail responses', async () => {
     vi.mocked(problemApi.getProblemById).mockResolvedValue({
       id: 8,
       title: 'single number',
@@ -63,7 +64,7 @@ describe('useProblemDetail', () => {
       difficulty: Difficulty.EASY,
       sharedFunctionName: 'singleNumber',
       sharedCodeSkeleton: 'FUNCTION single_number(nums):\n  // TODO',
-      sharedTestCases: '[{"input":{"nums":[2,2,1]},"expectedOutput":1,"description":"basic"}]',
+      standardCasePool: '[{"stdin":"3\\n2 2 1\\n","expectedStdout":"1\\n","publicCase":true,"description":"basic"}]',
       codeTemplates: [
         {
           language: 'PYTHON',
@@ -83,10 +84,11 @@ describe('useProblemDetail', () => {
 
     await loadProblem(8)
 
-    expect(problem.value?.sharedTestCases).toEqual([
+    expect(problem.value?.standardCasePool).toEqual([
       {
-        input: { nums: [2, 2, 1] },
-        expectedOutput: 1,
+        stdin: '3\n2 2 1\n',
+        expectedStdout: '1\n',
+        publicCase: true,
         description: 'basic',
       },
     ])

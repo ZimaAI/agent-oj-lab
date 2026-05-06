@@ -12,10 +12,13 @@ import com.oj.agent.core.question.model.response.AlgorithmCodeTemplateResponse;
 import com.oj.agent.core.question.model.request.AlgorithmQuestionPageRequest;
 import com.oj.agent.core.question.model.request.TagPageRequest;
 import com.oj.agent.core.question.model.response.AlgorithmQuestionResponse;
+import com.oj.agent.core.question.model.response.StandardCaseResponse;
 import com.oj.agent.core.question.model.response.TagResponse;
 import com.oj.agent.core.question.model.result.AlgorithmCodeTemplateResult;
 import com.oj.agent.core.question.model.result.AlgorithmQuestionResult;
+import com.oj.agent.core.question.model.result.StandardCaseResult;
 import com.oj.agent.core.question.model.result.TagResult;
+import com.oj.agent.core.question.util.StandardCasePoolCodec;
 import org.springframework.util.StringUtils;
 
 import java.util.Collections;
@@ -69,6 +72,7 @@ public final class AlgorithmQuestionConverter {
         response.setSharedFunctionName(result.getSharedFunctionName());
         response.setSharedCodeSkeleton(result.getSharedCodeSkeleton());
         response.setSharedTestCases(result.getSharedTestCases());
+        response.setStandardCasePool(toStandardCaseResponseList(result.getStandardCasePool()));
         response.setCodeTemplates(toCodeTemplateResponseList(result.getCodeTemplates()));
         response.setConversationId(result.getConversationId());
         response.setTraceId(result.getTraceId());
@@ -175,6 +179,7 @@ public final class AlgorithmQuestionConverter {
         AlgorithmQuestionResult result = buildBaseQuestionResult(question, tags);
         result.setSharedFunctionName(question.getSharedFunctionName());
         result.setSharedCodeSkeleton(question.getSharedCodeSkeleton());
+        result.setStandardCasePool(toStandardCaseResults(question.getStandardCasePool()));
         return result;
     }
 
@@ -186,6 +191,7 @@ public final class AlgorithmQuestionConverter {
             return null;
         }
         result.setSharedTestCases(question.getSharedTestCases());
+        result.setStandardCasePool(toStandardCaseResults(question.getStandardCasePool()));
         result.setCodeTemplates(codeTemplates == null ? Collections.emptyList() : codeTemplates);
         return result;
     }
@@ -220,6 +226,7 @@ public final class AlgorithmQuestionConverter {
         result.setSharedFunctionName(sharedFunctionName);
         result.setSharedCodeSkeleton(sharedCodeSkeleton);
         result.setSharedTestCases(sharedTestCases);
+        result.setStandardCasePool(toStandardCaseResults(sharedTestCases));
         result.setTags(toTagResults(tagNames));
         result.setCodeTemplates(Collections.emptyList());
         return result;
@@ -253,7 +260,10 @@ public final class AlgorithmQuestionConverter {
         question.setType(result.getType());
         question.setSharedFunctionName(result.getSharedFunctionName());
         question.setSharedCodeSkeleton(result.getSharedCodeSkeleton());
-        question.setSharedTestCases(result.getSharedTestCases());
+        String standardCasePoolJson = result.getStandardCasePool() == null || result.getStandardCasePool().isEmpty()
+                ? result.getSharedTestCases()
+                : StandardCasePoolCodec.serialize(toStandardCaseItems(result.getStandardCasePool()));
+        question.setStandardCasePool(standardCasePoolJson);
         question.setConversationId(result.getConversationId());
         question.setTraceId(result.getTraceId());
         question.setAgentName(result.getAgentName());
@@ -317,6 +327,7 @@ public final class AlgorithmQuestionConverter {
         result.setSharedFunctionName(source.getSharedFunctionName());
         result.setSharedCodeSkeleton(source.getSharedCodeSkeleton());
         result.setSharedTestCases(source.getSharedTestCases());
+        result.setStandardCasePool(source.getStandardCasePool() == null ? Collections.emptyList() : source.getStandardCasePool());
         result.setConversationId(source.getConversationId());
         result.setTraceId(source.getTraceId());
         result.setAgentName(source.getAgentName());
@@ -326,5 +337,61 @@ public final class AlgorithmQuestionConverter {
         result.setTags(source.getTags() == null ? Collections.emptyList() : source.getTags());
         result.setCodeTemplates(source.getCodeTemplates() == null ? Collections.emptyList() : source.getCodeTemplates());
         return result;
+    }
+
+    private static List<StandardCaseResult> toStandardCaseResults(String casePoolJson) {
+        List<StandardCasePoolCodec.StandardCaseItem> caseItems = StandardCasePoolCodec.parseAndNormalize(casePoolJson);
+        if (caseItems.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return caseItems.stream().map(AlgorithmQuestionConverter::toStandardCaseResult).toList();
+    }
+
+    private static StandardCaseResult toStandardCaseResult(StandardCasePoolCodec.StandardCaseItem item) {
+        if (item == null) {
+            return null;
+        }
+        StandardCaseResult result = new StandardCaseResult();
+        result.setStdin(item.getStdin());
+        result.setExpectedStdout(item.getExpectedStdout());
+        result.setPublicCase(item.isPublicCase());
+        result.setDescription(item.getDescription());
+        return result;
+    }
+
+    private static List<StandardCaseResponse> toStandardCaseResponseList(List<StandardCaseResult> results) {
+        if (results == null || results.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return results.stream()
+                .map(AlgorithmQuestionConverter::toStandardCaseResponse)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private static StandardCaseResponse toStandardCaseResponse(StandardCaseResult result) {
+        if (result == null) {
+            return null;
+        }
+        StandardCaseResponse response = new StandardCaseResponse();
+        response.setStdin(result.getStdin());
+        response.setExpectedStdout(result.getExpectedStdout());
+        response.setPublicCase(result.isPublicCase());
+        response.setDescription(result.getDescription());
+        return response;
+    }
+
+    private static List<StandardCasePoolCodec.StandardCaseItem> toStandardCaseItems(List<StandardCaseResult> standardCasePool) {
+        if (standardCasePool == null || standardCasePool.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return standardCasePool.stream().map(caseResult -> {
+            StandardCasePoolCodec.StandardCaseItem item = new StandardCasePoolCodec.StandardCaseItem();
+            item.setStdin(caseResult.getStdin());
+            item.setExpectedStdout(caseResult.getExpectedStdout());
+            item.setPublicCase(caseResult.isPublicCase());
+            item.setDescription(caseResult.getDescription());
+            return item;
+        }).toList();
     }
 }

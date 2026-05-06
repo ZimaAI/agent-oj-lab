@@ -16,11 +16,7 @@ public class AdminQuestionUpdateCommand {
 
     private String difficulty;
 
-    private String sharedFunctionName;
-
-    private String sharedCodeSkeleton;
-
-    private String sharedTestCases;
+    private List<StandardCaseUpdateCommand> standardCasePool;
 
     private List<String> tags;
 
@@ -30,8 +26,16 @@ public class AdminQuestionUpdateCommand {
     @Data
     public static class CodeTemplateUpdateCommand {
         private String language;
-        private String functionName;
-        private String codeSkeleton;
+        private String entryMethodName;
+        private String starterCode;
         private String referenceAnswer;
+    }
+
+    @Data
+    public static class StandardCaseUpdateCommand {
+        private String stdin;
+        private String expectedStdout;
+        private Boolean publicCase;
+        private String description;
     }
 }

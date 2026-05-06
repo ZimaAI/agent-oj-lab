@@ -48,9 +48,17 @@ public class AdminQuestionManagementConverter {
         command.setTitle(request.getTitle());
         command.setDescription(request.getDescription());
         command.setDifficulty(request.getDifficulty());
-        command.setSharedFunctionName(request.getSharedFunctionName());
-        command.setSharedCodeSkeleton(request.getSharedCodeSkeleton());
-        command.setSharedTestCases(request.getSharedTestCases());
+        if (request.getStandardCasePool() != null) {
+            command.setStandardCasePool(request.getStandardCasePool().stream().map(caseItem -> {
+                AdminQuestionCreateCommand.StandardCaseCreateCommand item =
+                        new AdminQuestionCreateCommand.StandardCaseCreateCommand();
+                item.setStdin(caseItem.getStdin());
+                item.setExpectedStdout(caseItem.getExpectedStdout());
+                item.setPublicCase(caseItem.getPublicCase());
+                item.setDescription(caseItem.getDescription());
+                return item;
+            }).toList());
+        }
         command.setTagIds(request.getTagIds());
         command.setTags(request.getTags());
         if (request.getCodeTemplates() != null) {
@@ -58,8 +66,8 @@ public class AdminQuestionManagementConverter {
                 AdminQuestionCreateCommand.CodeTemplateCreateCommand item =
                         new AdminQuestionCreateCommand.CodeTemplateCreateCommand();
                 item.setLanguage(template.getLanguage());
-                item.setFunctionName(template.getFunctionName());
-                item.setCodeSkeleton(template.getCodeSkeleton());
+                item.setEntryMethodName(template.getEntryMethodName());
+                item.setStarterCode(template.getStarterCode());
                 item.setReferenceAnswer(template.getReferenceAnswer());
                 return item;
             }).toList());
@@ -76,17 +84,25 @@ public class AdminQuestionManagementConverter {
         command.setTitle(request.getTitle());
         command.setDescription(request.getDescription());
         command.setDifficulty(request.getDifficulty());
-        command.setSharedFunctionName(request.getSharedFunctionName());
-        command.setSharedCodeSkeleton(request.getSharedCodeSkeleton());
-        command.setSharedTestCases(request.getSharedTestCases());
+        if (request.getStandardCasePool() != null) {
+            command.setStandardCasePool(request.getStandardCasePool().stream().map(caseItem -> {
+                AdminQuestionUpdateCommand.StandardCaseUpdateCommand item =
+                        new AdminQuestionUpdateCommand.StandardCaseUpdateCommand();
+                item.setStdin(caseItem.getStdin());
+                item.setExpectedStdout(caseItem.getExpectedStdout());
+                item.setPublicCase(caseItem.getPublicCase());
+                item.setDescription(caseItem.getDescription());
+                return item;
+            }).toList());
+        }
         command.setTags(request.getTags());
         if (request.getCodeTemplates() != null) {
             command.setCodeTemplates(request.getCodeTemplates().stream().map(template -> {
                 AdminQuestionUpdateCommand.CodeTemplateUpdateCommand item =
                         new AdminQuestionUpdateCommand.CodeTemplateUpdateCommand();
                 item.setLanguage(template.getLanguage());
-                item.setFunctionName(template.getFunctionName());
-                item.setCodeSkeleton(template.getCodeSkeleton());
+                item.setEntryMethodName(template.getEntryMethodName());
+                item.setStarterCode(template.getStarterCode());
                 item.setReferenceAnswer(template.getReferenceAnswer());
                 return item;
             }).toList());

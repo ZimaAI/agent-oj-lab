@@ -273,6 +273,7 @@ function hasQuestionFields(candidate: Record<string, unknown>): boolean {
   return [
     'title',
     'description',
+    'standardCasePool',
     'sharedFunctionName',
     'sharedCodeSkeleton',
     'sharedTestCases',
@@ -618,6 +619,41 @@ const normalizeQuestionTestCases = (testCases: unknown) => {
   return []
 }
 
+const normalizeStandardCasePool = (casePool: unknown) => {
+  if (Array.isArray(casePool)) {
+    return casePool
+      .map((item) => {
+        const current = (item ?? {}) as Record<string, unknown>
+        const stdin = typeof current.stdin === 'string' ? current.stdin : null
+        const expectedStdout = typeof current.expectedStdout === 'string' ? current.expectedStdout : null
+        const publicCase = typeof current.publicCase === 'boolean'
+          ? current.publicCase
+          : (typeof current.isPublic === 'boolean' ? current.isPublic : true)
+        if (!stdin || !expectedStdout) {
+          return null
+        }
+        return {
+          stdin,
+          expectedStdout,
+          publicCase,
+          description: typeof current.description === 'string' ? current.description : null,
+        }
+      })
+      .filter((item): item is { stdin: string; expectedStdout: string; publicCase: boolean; description: string | null } => item !== null)
+  }
+
+  if (typeof casePool === 'string' && casePool.trim()) {
+    try {
+      const parsed = JSON.parse(casePool)
+      return normalizeStandardCasePool(parsed)
+    } catch {
+      return []
+    }
+  }
+
+  return []
+}
+
 const normalizeCodeTemplates = (templates: unknown) => {
   if (!Array.isArray(templates)) {
     return []
@@ -638,31 +674,43 @@ const normalizeCodeTemplates = (templates: unknown) => {
     .filter((item): item is { language: string; functionName: string | null; codeSkeleton: string | null } => item !== null)
 }
 
-const mapGeneratedQuestion = (questionData: any): AlgorithmQuestion => ({
-  id: questionData.id ?? 0,
-  title: questionData.title ?? '',
-  description: questionData.description ?? '',
-  difficulty: questionData.difficulty ?? null,
-  type: questionData.type === 'AI' || questionData.type === 'SYSTEM' ? questionData.type : null,
-  sharedFunctionName: questionData.sharedFunctionName ?? questionData.functionName ?? null,
-  sharedCodeSkeleton: questionData.sharedCodeSkeleton ?? questionData.codeSkeleton ?? null,
-  sharedTestCases: normalizeQuestionTestCases(questionData.sharedTestCases ?? questionData.testCases),
-  codeTemplates: normalizeCodeTemplates(questionData.codeTemplates),
-  // Backward-compatible aliases for local transitional rendering.
-  codeSkeleton: questionData.sharedCodeSkeleton ?? questionData.codeSkeleton ?? null,
-  testCases: normalizeQuestionTestCases(questionData.sharedTestCases ?? questionData.testCases),
-  conversationId: questionData.conversationId ?? null,
-  traceId: questionData.traceId ?? null,
-  agentName: questionData.agentName ?? null,
-  createTime: questionData.createTime ?? '',
-  updateTime: questionData.updateTime ?? '',
-  tags: Array.isArray(questionData.tags)
-    ? questionData.tags.map((t: any) => ({
-        id: typeof t?.id === 'number' ? t.id : 0,
-        tagName: typeof t === 'string' ? t : (t?.tagName ?? ''),
+const mapGeneratedQuestion = (questionData: any): AlgorithmQuestion => {
+  const standardCasePool = normalizeStandardCasePool(questionData.standardCasePool)
+  const sharedTestCases = standardCasePool.length > 0
+    ? standardCasePool.map((item) => ({
+        input: item.stdin,
+        expectedOutput: item.expectedStdout,
+        description: item.description,
       }))
-    : []
-})
+    : normalizeQuestionTestCases(questionData.sharedTestCases ?? questionData.testCases)
+
+  return {
+    id: questionData.id ?? 0,
+    title: questionData.title ?? '',
+    description: questionData.description ?? '',
+    difficulty: questionData.difficulty ?? null,
+    type: questionData.type === 'AI' || questionData.type === 'SYSTEM' ? questionData.type : null,
+    standardCasePool,
+    sharedFunctionName: questionData.sharedFunctionName ?? questionData.functionName ?? null,
+    sharedCodeSkeleton: questionData.sharedCodeSkeleton ?? questionData.codeSkeleton ?? null,
+    sharedTestCases,
+    codeTemplates: normalizeCodeTemplates(questionData.codeTemplates),
+    // Backward-compatible aliases for local transitional rendering.
+    codeSkeleton: questionData.sharedCodeSkeleton ?? questionData.codeSkeleton ?? null,
+    testCases: normalizeQuestionTestCases(questionData.sharedTestCases ?? questionData.testCases),
+    conversationId: questionData.conversationId ?? null,
+    traceId: questionData.traceId ?? null,
+    agentName: questionData.agentName ?? null,
+    createTime: questionData.createTime ?? '',
+    updateTime: questionData.updateTime ?? '',
+    tags: Array.isArray(questionData.tags)
+      ? questionData.tags.map((t: any) => ({
+          id: typeof t?.id === 'number' ? t.id : 0,
+          tagName: typeof t === 'string' ? t : (t?.tagName ?? ''),
+        }))
+      : [],
+  }
+}
 
 const handleRun = async (code: string, language: ProgrammingLanguage) => {
   const questionId = await ensureCurrentQuestionId()

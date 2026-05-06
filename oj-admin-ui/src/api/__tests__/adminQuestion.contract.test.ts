@@ -68,15 +68,20 @@ describe('admin question api contract', () => {
       title: 'Two Sum',
       description: 'desc',
       difficulty: 'MEDIUM',
-      sharedFunctionName: 'twoSum',
-      sharedCodeSkeleton: 'class Solution {}',
-      sharedTestCases: '[{"input":{"nums":[2,7,11,15],"target":9},"expectedOutput":[0,1]}]',
+      standardCasePool: [
+        {
+          stdin: '4\n2 7 11 15\n9\n',
+          expectedStdout: '0 1\n',
+          publicCase: true,
+          description: 'sample',
+        },
+      ],
       tagIds: [1],
       tags: ['Array', 'Hash'],
       codeTemplates: [
-        { language: 'JAVA', functionName: 'twoSum', codeSkeleton: 'class Solution {}', referenceAnswer: 'return null;' },
-        { language: 'PYTHON', functionName: 'two_sum', codeSkeleton: 'def two_sum(): pass', referenceAnswer: 'return []' },
-        { language: 'JAVASCRIPT', functionName: 'twoSum', codeSkeleton: 'function twoSum() {}', referenceAnswer: 'return []' },
+        { language: 'JAVA', entryMethodName: 'solve', starterCode: 'class Main {}', referenceAnswer: 'class Main {}' },
+        { language: 'PYTHON', entryMethodName: 'solve', starterCode: 'def solve():\n    pass', referenceAnswer: 'def solve():\n    print(0)' },
+        { language: 'JAVASCRIPT', entryMethodName: 'solve', starterCode: 'function solve() {}', referenceAnswer: 'function solve() {}' },
       ],
     })
 

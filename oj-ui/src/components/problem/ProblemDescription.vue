@@ -27,10 +27,10 @@
           <div class="description-text">{{ problem.description }}</div>
         </section>
 
-        <section v-if="displayTestCases.length > 0" class="test-cases-section">
-          <h3>测试用例</h3>
+        <section v-if="displayCases.length > 0" class="test-cases-section">
+          <h3>示例用例</h3>
           <article
-            v-for="(testCase, index) in displayTestCases"
+            v-for="(testCase, index) in displayCases"
             :key="index"
             class="test-case"
           >
@@ -39,11 +39,11 @@
               <p v-if="testCase.description" class="test-description">{{ testCase.description }}</p>
               <div class="test-input">
                 <strong>输入</strong>
-                <pre>{{ formatTestCaseValue(testCase.input) }}</pre>
+                <pre>{{ testCase.stdin }}</pre>
               </div>
               <div class="test-output">
                 <strong>预期输出</strong>
-                <pre>{{ formatTestCaseValue(testCase.expectedOutput) }}</pre>
+                <pre>{{ testCase.expectedStdout }}</pre>
               </div>
             </div>
           </article>
@@ -60,7 +60,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import type { AlgorithmQuestion, TestCaseValue } from '@/types/problem'
+import type { AlgorithmQuestion, StandardCase, TestCaseValue } from '@/types/problem'
 import { Difficulty } from '@/types/problem'
 
 interface Props {
@@ -69,7 +69,21 @@ interface Props {
 
 const props = defineProps<Props>()
 const router = useRouter()
-const displayTestCases = computed(() => props.problem?.sharedTestCases ?? props.problem?.testCases ?? [])
+const displayCases = computed<StandardCase[]>(() => {
+  if (!props.problem) {
+    return []
+  }
+  if (props.problem.standardCasePool && props.problem.standardCasePool.length > 0) {
+    return props.problem.standardCasePool.filter((item) => item.publicCase)
+  }
+  const legacyCases = props.problem.sharedTestCases ?? props.problem.testCases ?? []
+  return legacyCases.map((item) => ({
+    stdin: formatTestCaseValue(item.input),
+    expectedStdout: formatTestCaseValue(item.expectedOutput),
+    publicCase: true,
+    description: item.description ?? null,
+  }))
+})
 
 const difficultyClass = computed(() => {
   if (!props.problem || !props.problem.difficulty) return ''

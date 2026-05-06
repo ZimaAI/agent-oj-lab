@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { problemApi } from '@/api/problem'
-import type { AlgorithmCodeTemplate, AlgorithmQuestion, TestCase, TestCaseResultVO } from '@/types/problem'
+import type { AlgorithmCodeTemplate, AlgorithmQuestion, StandardCase, TestCase, TestCaseResultVO } from '@/types/problem'
 import { getErrorMessage, getErrorStatus } from '@/utils/errorUtils'
 import { normalizeExecutionResultsPayload } from '@/utils/testCaseResultNormalizer'
 
@@ -19,6 +19,48 @@ function normalizeTestCases(testCases: unknown): TestCase[] {
   }
 
   return []
+}
+
+function normalizeStandardCasePool(casePool: unknown): StandardCase[] {
+  if (Array.isArray(casePool)) {
+    const normalized: StandardCase[] = []
+    for (const item of casePool) {
+      const current = (item ?? {}) as Record<string, unknown>
+      const stdin = typeof current.stdin === 'string' ? current.stdin : null
+      const expectedStdout = typeof current.expectedStdout === 'string' ? current.expectedStdout : null
+      const publicCase = typeof current.publicCase === 'boolean'
+        ? current.publicCase
+        : (typeof current.isPublic === 'boolean' ? current.isPublic : true)
+      if (!stdin || !expectedStdout) {
+        continue
+      }
+      normalized.push({
+        stdin,
+        expectedStdout,
+        publicCase,
+        description: typeof current.description === 'string' ? current.description : null,
+      })
+    }
+    return normalized
+  }
+
+  if (typeof casePool === 'string' && casePool.trim()) {
+    try {
+      return normalizeStandardCasePool(JSON.parse(casePool))
+    } catch {
+      return []
+    }
+  }
+
+  return []
+}
+
+function standardCasesToLegacyTestCases(casePool: StandardCase[]): TestCase[] {
+  return casePool.map((item) => ({
+    input: item.stdin,
+    expectedOutput: item.expectedStdout,
+    description: item.description ?? null,
+  }))
 }
 
 function normalizeCodeTemplates(codeTemplates: unknown): AlgorithmCodeTemplate[] {
@@ -45,13 +87,17 @@ function normalizeProblemDetail(problem: AlgorithmQuestion): AlgorithmQuestion {
   const raw = problem as AlgorithmQuestion & {
     testCases?: unknown
     sharedTestCases?: unknown
+    standardCasePool?: unknown
     codeTemplates?: unknown
     codeSkeleton?: unknown
     sharedCodeSkeleton?: unknown
     sharedFunctionName?: unknown
   }
 
-  const sharedTestCases = normalizeTestCases(raw.sharedTestCases ?? raw.testCases)
+  const standardCasePool = normalizeStandardCasePool(raw.standardCasePool)
+  const sharedTestCases = standardCasePool.length > 0
+    ? standardCasesToLegacyTestCases(standardCasePool)
+    : normalizeTestCases(raw.sharedTestCases ?? raw.testCases)
   const codeTemplates = normalizeCodeTemplates(raw.codeTemplates)
   const sharedCodeSkeleton = typeof raw.sharedCodeSkeleton === 'string'
     ? raw.sharedCodeSkeleton
@@ -59,6 +105,7 @@ function normalizeProblemDetail(problem: AlgorithmQuestion): AlgorithmQuestion {
 
   return {
     ...problem,
+    standardCasePool,
     sharedFunctionName: typeof raw.sharedFunctionName === 'string' ? raw.sharedFunctionName : null,
     sharedCodeSkeleton,
     sharedTestCases,

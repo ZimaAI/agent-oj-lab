@@ -524,6 +524,7 @@ import {
   type AdminQuestionDualDetail,
   type AdminQuestionListItem,
   type AdminQuestionProjection,
+  type AdminStandardCase,
   type AdminQuestionTag,
   type AdminQuestionType,
 } from '@/api/adminQuestion'
@@ -702,21 +703,43 @@ const parseCustomTagsInput = (raw: string) => {
   return values.length > 0 ? Array.from(new Set(values)) : undefined
 }
 
-const isValidSharedTestCases = (raw: string) => {
+const parseStandardCasePool = (raw: string): AdminStandardCase[] | null => {
   try {
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed) || parsed.length === 0) {
-      return false
+      return null
     }
-    return parsed.every((item) => {
+    const casePool: AdminStandardCase[] = []
+    for (const item of parsed) {
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        return false
+        return null
       }
-      const input = (item as { input?: unknown }).input
-      return !!input && typeof input === 'object' && !Array.isArray(input)
-    })
+      const current = item as Record<string, unknown>
+      if (typeof current.stdin === 'string' && typeof current.expectedStdout === 'string') {
+        casePool.push({
+          stdin: current.stdin,
+          expectedStdout: current.expectedStdout,
+          publicCase: typeof current.publicCase === 'boolean' ? current.publicCase : true,
+          description: typeof current.description === 'string' ? current.description : undefined,
+        })
+        continue
+      }
+      if ('input' in current && 'expectedOutput' in current) {
+        casePool.push({
+          stdin: typeof current.input === 'string' ? current.input : JSON.stringify(current.input),
+          expectedStdout: typeof current.expectedOutput === 'string'
+            ? current.expectedOutput
+            : JSON.stringify(current.expectedOutput),
+          publicCase: true,
+          description: typeof current.description === 'string' ? current.description : undefined,
+        })
+        continue
+      }
+      return null
+    }
+    return casePool
   } catch {
-    return false
+    return null
   }
 }
 
@@ -1187,8 +1210,8 @@ const closeCreate = () => {
 const onSubmitCreate = async () => {
   const title = createForm.title.trim()
   const description = createForm.description.trim()
-  const sharedFunctionName = createForm.sharedFunctionName.trim()
   const sharedTestCases = createForm.sharedTestCases.trim()
+  const standardCasePool = parseStandardCasePool(sharedTestCases)
   const javaFunctionName = createForm.javaFunctionName.trim()
   const javaCodeSkeleton = createForm.javaCodeSkeleton.trim()
   const javaReferenceAnswer = createForm.javaReferenceAnswer.trim()
@@ -1203,8 +1226,8 @@ const onSubmitCreate = async () => {
   if (
     !title
     || !description
-    || !sharedFunctionName
     || !sharedTestCases
+    || !standardCasePool
     || !javaFunctionName
     || !javaCodeSkeleton
     || !javaReferenceAnswer
@@ -1215,12 +1238,7 @@ const onSubmitCreate = async () => {
     || !javascriptCodeSkeleton
     || !javascriptReferenceAnswer
   ) {
-    createError.value = 'Please fill all required fields, including shared method, test cases, and all template blocks'
-    return
-  }
-
-  if (!isValidSharedTestCases(sharedTestCases)) {
-    createError.value = 'Shared test cases must be a non-empty JSON array and each item must contain an object input'
+    createError.value = 'Please fill all required fields, including standard cases, and all template blocks'
     return
   }
 
@@ -1228,28 +1246,26 @@ const onSubmitCreate = async () => {
     title,
     description,
     difficulty: createForm.difficulty,
-    sharedFunctionName,
-    sharedCodeSkeleton: '',
-    sharedTestCases,
+    standardCasePool,
     tagIds: createForm.selectedTagIds.length > 0 ? createForm.selectedTagIds : undefined,
     tags: customTags,
     codeTemplates: [
       {
         language: 'JAVA',
-        functionName: javaFunctionName,
-        codeSkeleton: javaCodeSkeleton,
+        entryMethodName: javaFunctionName,
+        starterCode: javaCodeSkeleton,
         referenceAnswer: javaReferenceAnswer,
       },
       {
         language: 'PYTHON',
-        functionName: pythonFunctionName,
-        codeSkeleton: pythonCodeSkeleton,
+        entryMethodName: pythonFunctionName,
+        starterCode: pythonCodeSkeleton,
         referenceAnswer: pythonReferenceAnswer,
       },
       {
         language: 'JAVASCRIPT',
-        functionName: javascriptFunctionName,
-        codeSkeleton: javascriptCodeSkeleton,
+        entryMethodName: javascriptFunctionName,
+        starterCode: javascriptCodeSkeleton,
         referenceAnswer: javascriptReferenceAnswer,
       },
     ],
