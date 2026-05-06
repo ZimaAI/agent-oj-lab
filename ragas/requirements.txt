@@ -1,0 +1,9 @@
+﻿fastapi==0.115.8
+uvicorn==0.34.0
+pydantic==2.10.6
+pytest==8.3.4
+httpx==0.28.1
+
+# Optional: install to enable true RAGAS evaluation (non-degraded mode)
+# ragas>=0.2.12
+# datasets>=2.20.0

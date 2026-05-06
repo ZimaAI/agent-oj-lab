@@ -1,0 +1,8 @@
+{
+  "openai": {
+    "api_key": "sk-beb4181781854aeb93fc97fcd18198b2",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "llm_model": "qwen-flash",
+    "embedding_model": "text-embedding-v3"
+  }
+}

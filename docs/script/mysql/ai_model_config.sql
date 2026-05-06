@@ -1,0 +1,3 @@
+insert into agent_oj_workflow.ai_model_config (id, model_key, model_name, model_type, provider, base_url, api_key, enabled, config_json, remark, is_delete, create_time, update_time)
+values  (2, 'qwen-flash', 'qwen-flash', 'CHAT', 'DASHSCOPE', 'https://dashscope.aliyuncs.com/compatible-mode', 'sk-beb4181781854aeb93fc97fcd18198b2', 1, null, '阿里云百炼千问', 0, '2026-03-30 18:08:01', '2026-03-30 18:44:26'),
+        (4, 'text-embedding-v3', 'text-embedding-v3', 'EMBEDDING', 'DASHSCOPE', 'https://dashscope.aliyuncs.com/compatible-mode', 'sk-beb4181781854aeb93fc97fcd18198b2', 1, null, '阿里云百炼千问', 0, '2026-03-30 18:15:45', '2026-03-30 18:44:26');

@@ -1,0 +1,335 @@
+[
+  {
+    "caseId": "TC-01",
+    "title": "基础意图识别：简单数组题",
+    "chain": "NEW_QUESTION",
+    "automationLevel": "hybrid",
+    "preconditions": [],
+    "conversationSteps": [
+      {
+        "mode": "chat",
+        "content": "给我一道简单数组题"
+      }
+    ],
+    "expectedFeatures": [
+      "返回一道正式算法题",
+      "题目主题明显与数组相关",
+      "难度接近简单",
+      "输出至少覆盖题目描述、输入输出说明、样例中的两项"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否明确落在出题链路而不是普通问答或代码评审",
+      "retrievalOrMatch": "题目是否贴合简单数组主题",
+      "answerCorrectness": "输出是否完整且可直接阅读",
+      "specialty": "出题可用性",
+      "robustness": "单轮基础请求是否稳定"
+    }
+  },
+  {
+    "caseId": "TC-02",
+    "title": "多约束题目请求",
+    "chain": "NEW_QUESTION",
+    "automationLevel": "manual",
+    "preconditions": [],
+    "conversationSteps": [
+      {
+        "mode": "chat",
+        "content": "给我一道中等难度的数组题，要求偏面试风格，最好和去重有关，不要用动态规划"
+      }
+    ],
+    "expectedFeatures": [
+      "返回一道正式题目而不是解释型回答",
+      "题目与数组和去重相关",
+      "难度接近中等",
+      "不要明显落到动态规划"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否仍然识别为出题请求",
+      "retrievalOrMatch": "是否满足数组、去重、中等难度等核心约束",
+      "answerCorrectness": "是否完整输出题目并说明输入输出",
+      "specialty": "复杂约束出题质量",
+      "robustness": "是否忽略排除条件"
+    }
+  },
+  {
+    "caseId": "TC-03",
+    "title": "模糊表达理解",
+    "chain": "NEW_QUESTION",
+    "automationLevel": "manual",
+    "preconditions": [],
+    "conversationSteps": [
+      {
+        "mode": "chat",
+        "content": "来一道适合新手热身的题，别太水，最好能让我练到双指针"
+      }
+    ],
+    "expectedFeatures": [
+      "返回正式题目",
+      "难度偏简单或简单偏中等",
+      "题目适合双指针思路",
+      "不要退化成概念解释"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否识别为出题而非概念问答",
+      "retrievalOrMatch": "题目是否表现出双指针训练价值",
+      "answerCorrectness": "题目表达是否清晰",
+      "specialty": "模糊需求转题目能力",
+      "robustness": "对自然语言模糊约束的稳定性"
+    }
+  },
+  {
+    "caseId": "TC-04",
+    "title": "多轮增强：逐步调整题目",
+    "chain": "NEW_QUESTION",
+    "automationLevel": "manual",
+    "preconditions": [
+      "必须在同一会话内连续执行三轮"
+    ],
+    "conversationSteps": [
+      {
+        "mode": "chat",
+        "content": "给我一道简单数组题"
+      },
+      {
+        "mode": "chat",
+        "content": "再难一点"
+      },
+      {
+        "mode": "chat",
+        "content": "换成字符串题，但保留面试风格"
+      }
+    ],
+    "expectedFeatures": [
+      "第二轮保留出题意图并提高难度",
+      "第三轮切换到字符串题",
+      "第三轮仍保留面试风格",
+      "多轮过程中不要丢失上下文"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否持续识别为出题链路",
+      "retrievalOrMatch": "每一轮题目是否贴合新的约束",
+      "answerCorrectness": "每轮输出是否完整可读",
+      "specialty": "多轮出题调整能力",
+      "robustness": "是否能正确处理省略表达"
+    }
+  },
+  {
+    "caseId": "TC-05",
+    "title": "基础代码评审",
+    "chain": "CODE_EVALUATION",
+    "automationLevel": "manual",
+    "preconditions": [
+      "同一会话内已经存在当前算法题",
+      "准备一段待评审代码"
+    ],
+    "conversationSteps": [
+      {
+        "mode": "code-evaluation",
+        "content": "请帮我评审这份代码"
+      }
+    ],
+    "expectedFeatures": [
+      "返回代码评审结果",
+      "输出与当前题目和代码相关",
+      "至少包含问题分析或改进建议",
+      "不要变成出新题或普通问答"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否进入代码评审链路",
+      "retrievalOrMatch": "评审链路不适用，检查是否绑定当前题目语境",
+      "answerCorrectness": "评审是否围绕当前代码展开",
+      "specialty": "评审有效性",
+      "robustness": "基础评审请求是否稳定"
+    }
+  },
+  {
+    "caseId": "TC-06",
+    "title": "错误代码评审：指出具体问题",
+    "chain": "CODE_EVALUATION",
+    "automationLevel": "manual",
+    "preconditions": [
+      "同一会话内已经存在当前算法题",
+      "准备一段包含明显边界问题或复杂度问题的代码"
+    ],
+    "conversationSteps": [
+      {
+        "mode": "code-evaluation",
+        "content": "我提交了代码，帮我看看哪里还有问题"
+      }
+    ],
+    "expectedFeatures": [
+      "指出至少一个具体问题",
+      "建议与题目要求和代码逻辑相关",
+      "不要只给泛化鼓励语",
+      "不要虚构代码中不存在的问题"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否识别为评审请求",
+      "retrievalOrMatch": "评审链路不适用，检查是否贴住当前题目与代码",
+      "answerCorrectness": "是否给出针对性问题和建议",
+      "specialty": "错误定位能力",
+      "robustness": "在明显错误样本上是否仍然空泛"
+    }
+  },
+  {
+    "caseId": "TC-07",
+    "title": "混合意图：评审后推荐下一题",
+    "chain": "MIXED",
+    "automationLevel": "manual",
+    "preconditions": [
+      "同一会话内已经存在当前算法题",
+      "准备一段待评审代码"
+    ],
+    "conversationSteps": [
+      {
+        "mode": "code-evaluation",
+        "content": "先帮我评审这份代码，如果通过了，再给我推荐一道更难一点的下一题"
+      }
+    ],
+    "expectedFeatures": [
+      "先完成代码评审",
+      "在评审结论基础上决定是否推荐下一题",
+      "不要直接跳过评审",
+      "回答结构要分步骤"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否优先识别主意图为代码评审",
+      "retrievalOrMatch": "下一题推荐是否与更高难度目标匹配",
+      "answerCorrectness": "两部分回答是否都覆盖",
+      "specialty": "评审与推荐串联能力",
+      "robustness": "混合意图下是否发生串链路"
+    }
+  },
+  {
+    "caseId": "TC-08",
+    "title": "普通问答：系统能力咨询",
+    "chain": "OTHER",
+    "automationLevel": "hybrid",
+    "preconditions": [],
+    "conversationSteps": [
+      {
+        "mode": "chat",
+        "content": "你这个系统可以帮我做什么？"
+      }
+    ],
+    "expectedFeatures": [
+      "回答系统能力说明",
+      "可以提到出题、代码评审、难度调整",
+      "不要直接生成题目",
+      "不要直接进入评审"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否进入普通问答链路",
+      "retrievalOrMatch": "问答链路不适用，检查内容是否贴合能力介绍",
+      "answerCorrectness": "能力介绍是否清晰完整",
+      "specialty": "普通问答质量",
+      "robustness": "能力咨询场景是否稳定"
+    }
+  },
+  {
+    "caseId": "TC-09",
+    "title": "普通问答：知识解释而非出题",
+    "chain": "OTHER",
+    "automationLevel": "manual",
+    "preconditions": [],
+    "conversationSteps": [
+      {
+        "mode": "chat",
+        "content": "什么是双指针，它一般适合解决什么问题？"
+      }
+    ],
+    "expectedFeatures": [
+      "解释双指针概念和适用场景",
+      "回答常见模式或典型问题类型",
+      "不要直接给一道题",
+      "表达清晰易懂"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否识别为普通问答而非出题请求",
+      "retrievalOrMatch": "问答链路不适用，检查概念解释是否贴题",
+      "answerCorrectness": "解释是否准确、清楚、完整",
+      "specialty": "知识讲解质量",
+      "robustness": "概念问题是否被误路由"
+    }
+  },
+  {
+    "caseId": "TC-10",
+    "title": "单轮混合请求：先问能力再要题",
+    "chain": "MIXED",
+    "automationLevel": "manual",
+    "preconditions": [],
+    "conversationSteps": [
+      {
+        "mode": "chat",
+        "content": "你能不能先告诉我你会怎么帮我刷题，然后给我一道简单字符串题"
+      }
+    ],
+    "expectedFeatures": [
+      "先简要说明辅助方式",
+      "再给出简单字符串题",
+      "两部分都覆盖",
+      "整体衔接自然"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否识别出复合请求而不是只处理一半",
+      "retrievalOrMatch": "题目是否贴合简单字符串要求",
+      "answerCorrectness": "说明和题目是否同时可用",
+      "specialty": "混合问答与出题组织能力",
+      "robustness": "单轮复合请求是否稳定"
+    }
+  },
+  {
+    "caseId": "TC-11",
+    "title": "反歧义测试：提交代码但不给代码",
+    "chain": "CODE_EVALUATION",
+    "automationLevel": "manual",
+    "preconditions": [
+      "当前会话没有绑定题目和代码上下文"
+    ],
+    "conversationSteps": [
+      {
+        "mode": "chat",
+        "content": "我提交代码了，帮我评审一下"
+      }
+    ],
+    "expectedFeatures": [
+      "提示缺少必要信息或要求补充",
+      "不要凭空输出详细评审",
+      "语气清晰直接",
+      "给出下一步补充方式"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否理解用户想要代码评审",
+      "retrievalOrMatch": "评审链路不适用，检查是否转为澄清请求",
+      "answerCorrectness": "是否避免编造评审结论",
+      "specialty": "信息不足场景处理质量",
+      "robustness": "异常前置条件下是否稳健"
+    }
+  },
+  {
+    "caseId": "TC-12",
+    "title": "边界测试：矛盾约束",
+    "chain": "NEW_QUESTION",
+    "automationLevel": "manual",
+    "preconditions": [],
+    "conversationSteps": [
+      {
+        "mode": "chat",
+        "content": "给我一道特别简单但又很考验动态规划能力、而且不要用动态规划思想的题"
+      }
+    ],
+    "expectedFeatures": [
+      "识别冲突约束并要求澄清，或明确说明取舍",
+      "不要无视矛盾直接硬给题",
+      "如果选择取舍，需要显式说明原因",
+      "整体回答保持自然"
+    ],
+    "scoringFocus": {
+      "intentRecognition": "是否识别为出题请求",
+      "retrievalOrMatch": "是否处理动态规划相关冲突约束",
+      "answerCorrectness": "是否合理解释无法同时满足的原因",
+      "specialty": "冲突约束处理质量",
+      "robustness": "高冲突输入下是否避免胡乱生成"
+    }
+  }
+]

@@ -1,0 +1,27 @@
+对话历史：
+{history}
+
+用户原始请求：
+{input}
+
+目标语言：
+{language}
+
+共享题目信息（由 CodeQuestionNode 生成）：
+{question}
+
+请严格基于共享题目信息生成该语言实现的 functionName、codeSkeleton、referenceAnswer。
+其中：
+1. codeSkeleton 必须是“只有函数签名 + 空方法体”的模板，不能包含实现语句、注释、解释文字、辅助函数、类封装。
+2. 空方法体规则：Python 仅 `pass`；Java / JavaScript 仅保留空花括号代码块。
+3. referenceAnswer 必须是可执行、可通过测试的完整标准答案。
+4. referenceAnswer 的参数与返回类型必须严格对齐 `sharedTestCases.input` / `expectedOutput` 的结构。
+5. 当参数名属于链表语义（`head` / `headA` / `headB` / `list1` / `list2` / `l1` / `l2`）时，执行器会把数组样例归一化为链表节点；必须按节点语义实现（访问 `val` / `next`），不要按数组下标处理。
+6. 若题目语义要求返回链表节点（如“相交链表”），必须返回节点对象本身；无交点返回 `null` / `None`，不要强行返回节点值或 `-1`。
+7. 非链表参数仍按 JSON 原结构处理（数组就是数组、对象就是对象），禁止把数组/对象整体转成字符串。
+8. 输出前做一次类型自检：用第一组 `sharedTestCases.input` 代入，确认代码不会出现参数类型不匹配或属性访问错误。
+
+Java 额外硬约束（高优先级）：
+1. Java 的 codeSkeleton 只能是“单一方法 + 空方法体”，不要输出 class/package/import/注解。
+2. 不要输出完整实现到 codeSkeleton；codeSkeleton 内不允许 `return`、循环、条件分支、`throw`、注释或任何占位语句。
+3. 输出前自检：若 language=java，确认 codeSkeleton 与 functionName 同名且方法体内部完全为空。

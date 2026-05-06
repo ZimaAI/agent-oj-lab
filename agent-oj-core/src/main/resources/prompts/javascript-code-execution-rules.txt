@@ -1,0 +1,191 @@
+# JavaScript 代码编写约束
+
+这段规则用于约束 Agent 在调用 `execute_python_code` 工具且 `language=javascript` 时生成内容。
+目标是同时生成：
+1. `referenceAnswer`：可被 JavaScript 执行器直接调用并通过测试的标准答案。
+2. `codeSkeleton`：提供给用户填写答案的代码框架，不是完整参考答案。
+
+## 必须遵守的规则
+
+1. 必须使用 ES2020+ 语法，并生成一个顶层函数声明：`function <functionName>(...) { ... }`。
+2. `functionName` 必须与 `referenceAnswer`、`codeSkeleton` 中的函数名完全一致（大小写一致）。
+3. 函数参数个数与顺序必须匹配 `testInputs` 对象的 key 顺序；不要随意改参数顺序。
+4. 所有可达执行路径都必须显式 `return`；不要依赖隐式 `undefined`。
+5. 若题目是原地修改题，也必须返回修改后的对象（如 `return nums;`），不能只做副作用。
+6. 返回值必须是可 JSON 序列化且可稳定比较的数据：`number/string/boolean/null/array/plain object`。
+7. 不要返回 `undefined`、`BigInt`、`Symbol`、函数、`Map/Set`、`Date`、自定义类实例等难比较结果。
+8. 禁止 `async` / `await` / Promise 作为主执行路径；执行器不会等待异步结果。
+9. 不要生成 `class` 封装、`main` 入口、IIFE、自执行样例、`console.log` 最终结果输出等运行入口代码。
+10. 不要依赖 `stdin`、`process.argv`、文件系统、网络请求、外部服务或项目外部环境。
+11. 不要输出 markdown 代码块标记（如 ```javascript）或解释性文字，只输出纯代码文本。
+12. 不要生成多个候选函数、多个同名函数或“方案 A/B”并列输出。
+13. `codeSkeleton` 必须是给用户的模板：仅保留函数签名与空函数体 `{}`，不能包含注释、占位返回或任何算法实现。
+14. `codeSkeleton` 与 `referenceAnswer` 必须明显不同；禁止复制同一份完整实现。
+15. `referenceAnswer` 是系统执行校验的答案代码，必须完整、可运行、可通过测试。
+16. 必须按 `testInputs` 形状实现；但当参数名属于链表语义（`head` / `headA` / `headB` / `list1` / `list2` / `l1` / `l2`）时，执行器会传入节点对象（`{val,next}`），应按节点语义处理。
+17. 链表参数禁止使用 `Array.isArray`、索引访问或 `length` 作为主逻辑；应通过 `node.val` / `node.next` 遍历。
+18. 对返回链表节点的题型（如相交链表）必须返回节点对象本身；无交点返回 `null`，不要返回节点值或 `-1`。
+
+## 执行器调用方式说明（务必理解）
+
+JavaScript 执行器会在你输出的代码后追加调用，等价于：
+`const __args = {...testInputs};`
+`const __result = functionName(...Object.values(__args));`
+`JSON.stringify(__result);`
+因此必须确保：
+- 入口函数就是 `functionName`。
+- 参数顺序与 `testInputs` 的 key 顺序一致。
+- 函数返回值可被 `JSON.stringify` 正确处理。
+- 不能依赖 `console.log` 作为判题输出，判题只看函数返回值。
+
+## 禁止事项
+
+- 不要写 `module.exports`、`export default`、`require()` 或 `import` 外部包。
+- 不要把数组/对象参数当作字符串解析（例如把 `["a","b"]` 当成 `"['a','b']"`）。
+- 不要混入 Java/Python 语法。
+- 不要把核心逻辑写在函数外层执行代码里。
+
+## Few-shot 示例
+
+### 示例 1：代码形态
+
+正确：
+```javascript
+function sum(nums) {
+  let total = 0;
+  for (const num of nums) {
+    total += num;
+  }
+  return total;
+}
+```
+错误（包含入口执行与打印）：
+```javascript
+class Solution {
+  sum(nums) {
+    return nums.reduce((acc, cur) => acc + cur, 0);
+  }
+}
+console.log(new Solution().sum([1, 2, 3]));
+```
+
+### 示例 2：参数顺序必须匹配 `testInputs`
+
+假设 `functionName = "twoSum"`，某条 `testInputs` 为：
+`{"nums":[2,7,11,15],"target":9}`
+正确：
+```javascript
+function twoSum(nums, target) {
+  const map = new Map();
+  for (let i = 0; i < nums.length; i++) {
+    const need = target - nums[i];
+    if (map.has(need)) {
+      return [map.get(need), i];
+    }
+    map.set(nums[i], i);
+  }
+  return [];
+}
+```
+错误（参数顺序颠倒）：
+```javascript
+function twoSum(target, nums) {
+  return [];
+}
+```
+
+### 示例 3：必须 `return`，不能只做副作用
+
+正确：
+```javascript
+function moveZeroes(nums) {
+  let insert = 0;
+  for (let i = 0; i < nums.length; i++) {
+    if (nums[i] !== 0) {
+      [nums[insert], nums[i]] = [nums[i], nums[insert]];
+      insert++;
+    }
+  }
+  return nums;
+}
+```
+错误（只修改不返回）：
+```javascript
+function moveZeroes(nums) {
+  let insert = 0;
+  for (let i = 0; i < nums.length; i++) {
+    if (nums[i] !== 0) {
+      [nums[insert], nums[i]] = [nums[i], nums[insert]];
+      insert++;
+    }
+  }
+}
+```
+
+### 示例 4：禁止异步主路径
+
+错误（执行器不会等待 Promise）：
+```javascript
+async function maxProfit(prices) {
+  return prices.length;
+}
+```
+正确（同步返回）：
+```javascript
+function maxProfit(prices) {
+  if (!Array.isArray(prices) || prices.length === 0) {
+    return 0;
+  }
+  let minPrice = prices[0];
+  let best = 0;
+  for (let i = 1; i < prices.length; i++) {
+    minPrice = Math.min(minPrice, prices[i]);
+    best = Math.max(best, prices[i] - minPrice);
+  }
+  return best;
+}
+```
+
+### 示例 5：`codeSkeleton` 与 `referenceAnswer` 必须区分
+
+正确（模板与答案不同）：
+```json
+{
+  "functionName": "maxSubArray",
+  "codeSkeleton": "function maxSubArray(nums) {}",
+  "referenceAnswer": "function maxSubArray(nums) {\\n  let best = nums[0];\\n  let cur = nums[0];\\n  for (let i = 1; i < nums.length; i++) {\\n    cur = Math.max(nums[i], cur + nums[i]);\\n    best = Math.max(best, cur);\\n  }\\n  return best;\\n}"
+}
+```
+错误（两者完全相同）：
+```json
+{
+  "functionName": "maxSubArray",
+  "codeSkeleton": "function maxSubArray(nums) {\\n  let best = nums[0];\\n  let cur = nums[0];\\n  for (let i = 1; i < nums.length; i++) {\\n    cur = Math.max(nums[i], cur + nums[i]);\\n    best = Math.max(best, cur);\\n  }\\n  return best;\\n}",
+  "referenceAnswer": "function maxSubArray(nums) {\\n  let best = nums[0];\\n  let cur = nums[0];\\n  for (let i = 1; i < nums.length; i++) {\\n    cur = Math.max(nums[i], cur + nums[i]);\\n    best = Math.max(best, cur);\\n  }\\n  return best;\\n}"
+}
+```
+
+### 示例 6：字符串数组保持结构化类型
+
+假设某条 `testInputs` 为：`{"strs":["eat","tea","ate"]}`
+正确（函数按数组接收）：
+```javascript
+function groupAnagrams(strs) {
+  const map = new Map();
+  for (const s of strs) {
+    const key = [...s].sort().join("");
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key).push(s);
+  }
+  return Array.from(map.values());
+}
+```
+错误（把数组当字符串处理）：
+```javascript
+function groupAnagrams(strs) {
+  const arr = JSON.parse(strs);
+  return [arr];
+}
+```

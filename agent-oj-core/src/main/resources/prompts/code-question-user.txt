@@ -1,0 +1,19 @@
+# 对话历史
+{history}
+
+# 用户输入
+{input}
+
+# 改写后的查询语句
+{rewritten_question}
+
+# 意图
+{intent}
+
+# 当前问题
+{current_question}
+
+# 指令
+按照系统约束条件，生成一份完整的共享问题JSON文件。
+聚焦于问题描述的质量，以及确定性的共享测试用例。
+`sharedCodeSkeleton` 必须是单行函数签名伪代码（`FUNCTION functionName(...)`），不能包含方法体、实现语句或注释。

@@ -1,0 +1,21 @@
+spring:
+  profiles:
+    active: local
+
+app:
+  rag:
+    similarity:
+      hit-threshold: 0.9
+      reference-threshold: 0.7
+    top-k: 5
+    preference-weight: 0.3
+    document-split:
+      split-type: TITLE
+      chunk-size: 1000
+      overlap: 100
+      title-level: 3
+      separator: "\\n\\n"
+      regex: "(?m)^#{1,6}\\s"
+    code-segment:
+      description-threshold: 5
+      description-max-chars: 200
